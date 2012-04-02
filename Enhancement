@@ -1,0 +1,7 @@
+We provide the following features as a part of enhancement to the basic DFS:
+
+1. Secured login: Our DFS requires the user to login with his username and password before being given access to the Server.
+
+2. Volume Structure at the server: Each user is allocated a separate folder at the server side. The user is allowed access only to his directory.
+
+3. Backup Server: We have designed our file system to have an automatic backup system at a different server location. This backup server would contain all the user data created at the master server.
