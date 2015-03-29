@@ -25,17 +25,19 @@ static const char realpat[100];// ="/home/apawar2/server1";
 int filefd;
 char fpath[200];
 int res;
-struct data_received{
-char path[200];
-char func[100];
-mode_t mode;
-int filefd;
-int mask;
-size_t size;
-off_t offset;
-char buf[4096];
-int flags;
-uint64_t dir;
+
+struct data_received
+{
+	char path[200];
+	char func[100];
+	mode_t mode;
+	int filefd;
+	int mask;
+	size_t size;
+	off_t offset;
+	char buf[4096];
+	int flags;
+	uint64_t dir;
 };
 
 
@@ -47,122 +49,93 @@ int newsockfd;
 
 int main(int argc, char *argv[])
 {
-long sizel;
-char *serverbuf;
-char *ptr;
+	long sizel;
+	char *serverbuf;
+	char *ptr;
+	sizel = pathconf(".", _PC_PATH_MAX);
 
+	if ((serverbuf = (char *)malloc((size_t)sizel)) != NULL)
+		ptr = getcwd(serverbuf, (size_t)sizel);
 
-sizel = pathconf(".", _PC_PATH_MAX);
+	strcpy(realpat,serverbuf);
+	socklen_t clilen;
+	struct sockaddr_in serv_addr, cli_addr;
+	int n;
 
+	struct data_received * request= (struct data_received *) malloc(sizeof(struct data_received));
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
-if ((serverbuf = (char *)malloc((size_t)sizel)) != NULL)
-    ptr = getcwd(serverbuf, (size_t)sizel);
+	bzero((char *) &serv_addr, sizeof(serv_addr));
 
-strcpy(realpat,serverbuf);
-     socklen_t clilen;
-          struct sockaddr_in serv_addr, cli_addr;
-     int n;
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = INADDR_ANY;
 
+	serv_addr.sin_port = htons(atoi(argv[1]));
 
-struct data_received * request= (struct data_received *) malloc(sizeof(struct data_received));
- sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (bind(sockfd, (struct sockaddr *)&serv_addr,sizeof(serv_addr)) >= 0)
+	{
 
-  bzero((char *) &serv_addr, sizeof(serv_addr));
-
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_addr.s_addr = INADDR_ANY;
-
-    serv_addr.sin_port = htons(atoi(argv[1]));
-
-     if (bind(sockfd, (struct sockaddr *)&serv_addr,sizeof(serv_addr)) >= 0)
-{
-
-clilen=sizeof(cli_addr);
-     listen(sockfd,6);
- while(1)
-{
-int ret;
+		clilen=sizeof(cli_addr);
+		listen(sockfd,6);
+		while(1)
+		{
+			int ret;
 start_up:
-newsockfd = accept(sockfd,(struct sockaddr *) &cli_addr, &clilen);
+			newsockfd = accept(sockfd,(struct sockaddr *) &cli_addr, &clilen);
+			memset(request,0,sizeof(struct data_received));
 
+			char sync='s';
+			n = send(newsockfd,&sync,sizeof(char),0);
+			n = recv(newsockfd,request,sizeof(struct data_received),0);
+			strcpy(fpath,realpat);
+			strcat(fpath,request->path);
 
-memset(request,0,sizeof(struct data_received));
+			printf("%s\n",request->func);
 
+			if(!strcmp(request->func,"mkdir"))
+			{
+				printf(" Inside: %s", fpath);
+				res = mkdir(fpath, request->mode);
+				if (res == -1)
+					res=-errno;
+			}
 
+			if(!strcmp(request->func,"rmdir"))
+			{
+				printf(" Inside: %s", fpath);
+				res = rmdir(fpath);
+				if (res < -1)
+					res=-errno;
+			}
 
-char sync='s';
-n = send(newsockfd,&sync,sizeof(char),0);
+			if(!strcmp(request->func,"unlink"))
+			{
+				printf(" Inside: %s", fpath);
+				res = unlink(fpath);
+				if (res < 0)
+					res=-errno;
+			}
+			if(!strcmp(request->func,"write"))
+			{
+				char bufw[4096];
+				printf(" Inside: %s", fpath);
+				int filefd= open(fpath,O_WRONLY);
 
-
-n = recv(newsockfd,request,sizeof(struct data_received),0);
-
-strcpy(fpath,realpat);
-strcat(fpath,request->path);
-
-printf("%s\n",request->func);
-
-if(!strcmp(request->func,"mkdir"))
-{
-
-printf(" Inside: %s", fpath);
-res = mkdir(fpath, request->mode);
-        if (res == -1)
-res=-errno;
-
-
-
-}
-
-if(!strcmp(request->func,"rmdir"))
-{
-printf(" Inside: %s", fpath);
-res = rmdir(fpath);
-                if (res < -1)
-res=-errno;
-
-
-}
-
-if(!strcmp(request->func,"unlink"))
-{
-printf(" Inside: %s", fpath);
-res = unlink(fpath);
-                if (res < 0)
-                res=-errno;
-
-
-
-}
-if(!strcmp(request->func,"write"))
-{
-char bufw[4096];
-printf(" Inside: %s", fpath);
-int filefd= open(fpath,O_WRONLY);
-
-char syncw='s';
-n=send(newsockfd,&syncw,sizeof(char),0);
-
-n=recv(newsockfd,&bufw,sizeof(bufw),0);
-
-
-res = pwrite(filefd, bufw, request->size, request->offset);
-
-    if (res < 0)
-        res =-errno;
-
-
-}
-if(!strcmp(request->func,"create"))
-{
-
-filefd = creat(fpath, request->mode);
-        if (filefd<0)
-res=-errno;
-
-}
-
-close(newsockfd);
-}
-}
-return 0;
+				char syncw='s';
+				n=send(newsockfd,&syncw,sizeof(char),0);
+				n=recv(newsockfd,&bufw,sizeof(bufw),0);
+				res = pwrite(filefd, bufw, request->size, request->offset);
+				if (res < 0)
+					res =-errno;
+			}
+			if(!strcmp(request->func,"create"))
+			{
+				filefd = creat(fpath, request->mode);
+				if (filefd<0)
+					res=-errno;
+			}
+			close(newsockfd);
+		}
+	}
+	return 0;
 }
